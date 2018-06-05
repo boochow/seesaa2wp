@@ -250,7 +250,7 @@ class MT_Import extends WP_Importer {
 		$this->mt_authors_form();
 	}
 
-	function save_post(&$post, &$comments, &$pings) {
+	function save_post(&$post, &$comments, &$pings, &$tags) {
 		$post = get_object_vars($post);
 		$post = add_magic_quotes($post);
 		$post = (object) $post;
@@ -264,7 +264,6 @@ class MT_Import extends WP_Importer {
 
 			if ( '' != trim( $post->extended ) )
 					$post->post_content .= "\n<!--more-->\n$post->extended";
-
 			$post->post_author = $this->checkauthor($post->post_author); //just so that if a post already exists, new users are not created by checkauthor
 			$post_id = wp_insert_post($post);
 			if ( is_wp_error( $post_id ) )
@@ -276,10 +275,10 @@ class MT_Import extends WP_Importer {
 			}
 
 			 // Add tags or keywords
-			if ( 1 < strlen($post->post_keywords) ) {
+			if ( 1 < strlen($tags) ) {
 			 	// Keywords exist.
-				printf('<br />'.__('Adding tags <em>%s</em>...', 'movabletype-importer'), stripslashes($post->post_keywords));
-				wp_add_post_tags($post_id, $post->post_keywords);
+				printf('<br />'.__('Adding tags <em>%s</em>...', 'movabletype-importer'), stripslashes($tags));
+				wp_add_post_tags($post_id, $tags);
 			}
 		}
 
@@ -333,6 +332,7 @@ class MT_Import extends WP_Importer {
 		$comments = array();
 		$ping = new StdClass();
 		$pings = array();
+		$tags = '';
 
 		echo "<div class='wrap'><ol>";
 
@@ -352,7 +352,8 @@ class MT_Import extends WP_Importer {
 			} else if ( '--------' == $line ) {
 				// Finishing a post.
 				$context = '';
-				$result = $this->save_post($post, $comments, $pings);
+				$post->post_content = wpautop($post->post_content, false);
+				$result = $this->save_post($post, $comments, $pings, $tags);
 				if ( is_wp_error( $result ) )
 					return $result;
 				$post = new StdClass;
@@ -360,6 +361,7 @@ class MT_Import extends WP_Importer {
 				$ping = new StdClass();
 				$comments = array();
 				$pings = array();
+				$tags = '';
 			} else if ( 'BODY:' == $line ) {
 				$context = 'body';
 			} else if ( 'EXTENDED BODY:' == $line ) {
@@ -409,6 +411,8 @@ class MT_Import extends WP_Importer {
 				$category = trim( substr($line, strlen('CATEGORY:')) );
 				if ( '' != $category )
 					$post->categories[] = $category;
+			} else if ( 0 === strpos($line, "TAGS:") ) {
+				$tags = trim( substr($line, strlen("TAGS:")) );
 			} else if ( 0 === strpos($line, 'PRIMARY CATEGORY:') ) {
 				$category = trim( substr($line, strlen('PRIMARY CATEGORY:')) );
 				if ( '' != $category )
@@ -456,6 +460,8 @@ class MT_Import extends WP_Importer {
 					$line .= "\n";
 
 				if ( 'body' == $context ) {
+					if( empty($line) )
+						$line .= "\n";
 					$post->post_content .= $line;
 				} else if ( 'extended' ==  $context ) {
 					$post->extended .= $line;
